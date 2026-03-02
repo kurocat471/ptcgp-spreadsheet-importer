@@ -1,7 +1,7 @@
-Privacy Policy for PTCGP Tracking Spreadsheet Importer
+# Privacy Policy for PTCGP Tracking Spreadsheet Importer
 Effective Date: March 1, 2026
 
-1. Information Collected
+### 1. Information Collected
 
 This application accesses Google account data only as necessary to perform its intended function.
 Depending on granted permissions, this may include:
@@ -11,7 +11,7 @@ Depending on granted permissions, this may include:
 
 The application does not collect, store, or share personal data outside of the user's Google account.
 
-2. How Information Is Used
+### 2. How Information Is Used
 
 Data accessed by the application is used solely to:
 - Perform spreadsheet import operations
@@ -19,14 +19,14 @@ Data accessed by the application is used solely to:
 
 No data is sold, shared, or transferred to third parties.
 
-3. Data Storage
+### 3. Data Storage
 
 This application does not store user data outside of Google services. All processing occurs within Google Apps Script and the user's Google account.
 
-4. Third-Party Services
+### 4. Third-Party Services
 
 This application uses Google APIs and complies with Google API Services User Data Policy.
 
-5. Contact
+### 5. Contact
 
 For questions, contact monetkc471@gmail.com
