@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Roboto, Arial; padding:20px;">
+    <div>Loading data…</div>
+
+    <div style="margin-top:15px; height:8px; background:#eee; border-radius:4px;">
+      <div style="width:100%; height:100%; background:#4285f4; border-radius:4px; animation: pulse 1.5s infinite;"></div>
+    </div>
+
+    <style>
+      @keyframes pulse {
+        0% { opacity: .4; }
+        50% { opacity: 1; }
+        100% { opacity: .4; }
+      }
+    </style>
+
+    <script>
+      const FILE_ID = <?!= JSON.stringify(fileId) ?>;
+      const MODE = <?= mode ?>;
+
+      window.onload = function() {
+        google.script.run
+          .withSuccessHandler(function(copiedSheets) {
+            google.script.host.close();
+            google.script.run.showCompletionDialog(copiedSheets);
+          })
+          .withFailureHandler(function(err) {
+            alert("Error: " + err.message);
+            google.script.host.close();
+          })
+          .importData(FILE_ID, MODE);
+      };
+    </script>
+  </body>
+</html>
