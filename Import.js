@@ -32,6 +32,19 @@ function showFilePicker(mode) {
   SpreadsheetApp.getUi().showModalDialog(html, "Select Old Spreadsheet");
 }
 
+function getHeaderMap(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const headers = sheet.getRange(2, 1, 1, lastColumn).getValues()[0];
+  const map = {};
+
+  headers.forEach((h, i) => {
+    if (!map[h]) map[h] = [];
+    map[h].push(i + 1);
+  });
+
+  return map;
+}
+
 function getSpreadsheetFiles() {
   const activeId = SpreadsheetApp.getActive().getId();
   const files = [];
@@ -61,13 +74,21 @@ function openProgressDialog(fileId, mode) {
   template.fileId = fileId;
   template.mode = mode;
 
+  const labels = {
+    checkboxes: "Importing Checkboxes Only...",
+    quantities: "Importing Quantities Only...",
+    both: "Importing Checkboxes and Quantities..."
+  };
+
+  const title = labels[mode] || "Importing...";
+
   const html = template
     .evaluate()
     .setWidth(400)
     .setHeight(150)
     .setSandboxMode(HtmlService.SandboxMode.IFRAME);
 
-  SpreadsheetApp.getUi().showModalDialog(html, "Importing...");
+  SpreadsheetApp.getUi().showModalDialog(html, title);
 }
 
 function showProgressComplete() {
@@ -78,72 +99,98 @@ function showProgressError(message) {
   SpreadsheetApp.getUi().alert("Error: " + message);
 }
 
-function importData(fileId, mode) {  
+function setProgress(sheetName) {
+  PropertiesService.getScriptProperties().setProperty("IMPORT_PROGRESS", sheetName);
+}
+
+function getProgress() {
+  return PropertiesService.getScriptProperties().getProperty("IMPORT_PROGRESS");
+}
+
+
+function importData(fileId, mode, startIndex, copiedSheets) {
+  const startTime = Date.now();
+  const maxRunTime = 60000;
   const oldSpreadsheet = SpreadsheetApp.openById(fileId);
   const newSpreadsheet = SpreadsheetApp.getActive();
 
-  const excludePages = ["Summary", "Card Collection", "Lookups"];
-  let copiedSheets = [];
+  const needsQuantities = mode === "quantities" || mode === "both";
+  const needsCheckboxes = mode === "checkboxes" || mode === "both";
 
-  oldSpreadsheet.getSheets().forEach(oldPage => {
-    const pageName = oldPage.getName();
-    if (excludePages.includes(pageName)) return;
+  const excludePages = new Set(["Summary", "Card Collection", "Lookups"]);
+  const oldPages = oldSpreadsheet.getSheets();
+  const newSheets = {};
 
-    const newPage = newSpreadsheet.getSheetByName(pageName);
-    if (!newPage) return;
-
-    const lastRow = oldPage.getLastRow();
-    if (lastRow <= 2) return;
-
-    let values;
-
-    let copied = false;
-
-    Logger.log("Mode: " + mode);
-
-    if (mode === "checkboxes" || mode === "both") {
-      values = oldPage.getRange(3, 1, lastRow - 2, 1).getValues();
-      newPage.getRange(3, 1, values.length, 1).setValues(values);
-
-      copied = true;
-    }
-    
-    if (mode === "quantities" || mode === "both") {
-      const oldCol = findQuantityColumn(oldPage)
-      const newCol = findQuantityColumn(newPage)
-
-      if (!oldCol || !newCol) return;
-
-      const values = oldPage
-        .getRange(3, oldCol, lastRow - 2, 1)
-        .getValues();
-
-      newPage
-        .getRange(3, newCol, values.length, 1)
-        .setValues(values);
-
-      copied = true;
-    }
-
-    if (copied) {
-      copiedSheets.push(pageName);
-    }
+  newSpreadsheet.getSheets().forEach(sheet => {
+    newSheets[sheet.getName()] = sheet;
   });
 
-  return copiedSheets;
-}
+  startIndex = startIndex || 0;
+  copiedSheets = copiedSheets || [];
 
-function findQuantityColumn(sheet) {
-  const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(2, 1, 1, lastCol).getValues()[0];
-
-  for (let col = 0; col < headers.length; col++) {
-    if (headers[col] === "Obtained") {
-      return col + 1;
-    }
+  if (startIndex === 0) {
+    PropertiesService.getScriptProperties().deleteProperty("IMPORT_PROGRESS");
   }
 
-  return null;
+  for (let i = startIndex; i < oldPages.length; i++) {
+    if (Date.now() - startTime >= maxRunTime) {
+      return {
+        done: false,
+        nextIndex: i,
+        copiedSheets: copiedSheets
+      };
+    }
+
+    const oldPage = oldPages[i];
+    const pageName = oldPage.getName();
+
+    if (excludePages.has(pageName)) continue;
+
+    setProgress(pageName);
+
+    const newPage = newSheets[pageName];
+
+    if (!newPage) continue;
+
+    const lastRow = oldPage.getLastRow();
+
+    if (lastRow <= 2) continue;
+
+    let copied = false;
+    let oldCol = null;
+    let newCol = null;
+
+    if (needsQuantities) {
+      const oldMap = getHeaderMap(oldPage);
+      const newMap = getHeaderMap(newPage);
+
+      oldCol = oldMap["Obtained"]?.[0];
+      newCol = newMap["Obtained"]?.[0];
+    }
+
+    if (needsCheckboxes) {
+      const values = oldPage.getRange(3, 1, lastRow - 2, 1).getValues();
+      newPage.getRange(3, 1, values.length, 1).setValues(values);
+      copied = true;
+    }
+
+    if (needsQuantities && oldCol && newCol) {
+      const values = oldPage.getRange(3, oldCol, lastRow - 2, 1).getValues();
+      newPage.getRange(3, newCol, values.length, 1).setValues(values);
+      copied = true;
+    }
+
+    if (copied) copiedSheets.push(pageName);
+  }
+
+  if (copiedSheets.length > 0) {
+    showCompletionDialog(copiedSheets);
+  }
+
+  return {
+    done: true,
+    copiedSheets: copiedSheets
+  };
 }
 
 function showCompletionDialog(copiedSheets) {
